@@ -22,6 +22,9 @@ type FileInfo struct {
 	// v1 files.
 	PiecesRoot    g.Option[[32]byte] `bencode:"-"`
 	TorrentOffset int64              `bencode:"-"`
+
+	// For special purposes
+	Time int64 `bencode:"time,omitempty"`
 }
 
 func (fi *FileInfo) DisplayPath(info *Info) string {
