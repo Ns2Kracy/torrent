@@ -13,7 +13,7 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/gorilla/websocket"
 	"github.com/pion/datachannel"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 
 	"github.com/anacrolix/torrent/tracker"
 )
