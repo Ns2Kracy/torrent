@@ -1,11 +1,11 @@
 package torrent
 
 import (
+	"io"
 	"net"
 	"strconv"
 	"time"
 
-	"github.com/pion/datachannel"
 	"github.com/pion/webrtc/v4"
 
 	"github.com/anacrolix/torrent/webtorrent"
@@ -14,7 +14,7 @@ import (
 const webrtcNetwork = "webrtc"
 
 type webrtcNetConn struct {
-	datachannel.ReadWriteCloser
+	io.ReadWriteCloser
 	webtorrent.DataChannelContext
 }
 
