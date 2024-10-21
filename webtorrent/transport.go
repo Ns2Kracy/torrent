@@ -147,7 +147,7 @@ func (tc *TrackerClient) newOffer(
 	return
 }
 
-type onDetachedDataChannelFunc func(detached DataChannelConn, ctx context.Context)
+type onDetachedDataChannelFunc func(dc DataChannelConn, ctx context.Context)
 
 func (tc *TrackerClient) initAnsweringPeerConnection(
 	peerConn *wrappedPeerConnection,
@@ -158,13 +158,13 @@ func (tc *TrackerClient) initAnsweringPeerConnection(
 		peerConn.Close()
 	})
 	peerConn.OnDataChannel(func(d *webrtc.DataChannel) {
-		initDataChannel(d, peerConn, func(detached DataChannelConn, ctx context.Context) {
+		initDataChannel(d, peerConn, func(dc DataChannelConn, ctx context.Context) {
 			timer.Stop()
 			metrics.Add("answering peer connection conversions", 1)
 			tc.mu.Lock()
 			tc.stats.ConvertedInboundConns++
 			tc.mu.Unlock()
-			tc.OnConn(detached, DataChannelContext{
+			tc.OnConn(dc, DataChannelContext{
 				OfferId:        offerContext.Id,
 				LocalOffered:   false,
 				InfoHash:       offerContext.InfoHash,
