@@ -12,10 +12,6 @@ import (
 	"github.com/anacrolix/missinggo/v2/pproffd"
 	"github.com/pion/datachannel"
 	"github.com/pion/webrtc/v3"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -36,8 +32,7 @@ type wrappedPeerConnection struct {
 	*webrtc.PeerConnection
 	closeMu sync.Mutex
 	pproffd.CloseWrapper
-	span trace.Span
-	ctx  context.Context
+	ctx context.Context
 
 	onCloseHandler func()
 }
@@ -49,7 +44,6 @@ func (me *wrappedPeerConnection) Close() error {
 	me.onClose()
 
 	err := me.CloseWrapper.Close()
-	me.span.End()
 	return err
 }
 
@@ -70,41 +64,32 @@ func (me *wrappedPeerConnection) onClose() {
 func newPeerConnection(logger log.Logger, iceServers []webrtc.ICEServer) (*wrappedPeerConnection, error) {
 	newPeerConnectionMu.Lock()
 	defer newPeerConnectionMu.Unlock()
-	ctx, span := otel.Tracer(tracerName).Start(context.Background(), "PeerConnection")
 
 	pcConfig := webrtc.Configuration{ICEServers: iceServers}
 
 	pc, err := api.NewPeerConnection(pcConfig)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		span.RecordError(err)
-		span.End()
 		return nil, err
 	}
 	wpc := &wrappedPeerConnection{
 		PeerConnection: pc,
 		CloseWrapper:   pproffd.NewCloseWrapper(pc),
-		ctx:            ctx,
-		span:           span,
 	}
 	// If the state change handler intends to call Close, it should call it on the wrapper.
 	wpc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		logger.Levelf(log.Debug, "webrtc PeerConnection state changed to %v", state)
-		span.AddEvent("connection state changed", trace.WithAttributes(attribute.String("state", state.String())))
 	})
 	return wpc, nil
 }
 
 func setAndGatherLocalDescription(peerConnection *wrappedPeerConnection, sdp webrtc.SessionDescription) (_ webrtc.SessionDescription, err error) {
 	gatherComplete := webrtc.GatheringCompletePromise(peerConnection.PeerConnection)
-	peerConnection.span.AddEvent("setting local description")
 	err = peerConnection.SetLocalDescription(sdp)
 	if err != nil {
 		err = fmt.Errorf("setting local description: %w", err)
 		return
 	}
 	<-gatherComplete
-	peerConnection.span.AddEvent("gathering complete")
 	return *peerConnection.LocalDescription(), nil
 }
 
@@ -125,14 +110,12 @@ func (tc *TrackerClient) newOffer(
 		return
 	}
 
-	peerConnection.span.SetAttributes(attribute.String(webrtcConnTypeKey, "offer"))
-
 	dataChannel, err = peerConnection.CreateDataChannel(dataChannelLabel, nil)
 	if err != nil {
 		err = fmt.Errorf("creating data channel: %w", err)
 		peerConnection.Close()
 	}
-	initDataChannel(dataChannel, peerConnection, func(dc datachannel.ReadWriteCloser, dcCtx context.Context, dcSpan trace.Span) {
+	initDataChannel(dataChannel, peerConnection, func(dc datachannel.ReadWriteCloser, dcCtx context.Context) {
 		metrics.Add("outbound offers answered with datachannel", 1)
 		tc.mu.Lock()
 		tc.stats.ConvertedOutboundConns++
@@ -143,7 +126,6 @@ func (tc *TrackerClient) newOffer(
 			InfoHash:       infoHash,
 			peerConnection: peerConnection,
 			Context:        dcCtx,
-			Span:           dcSpan,
 		})
 	})
 
@@ -162,21 +144,18 @@ func (tc *TrackerClient) newOffer(
 	return
 }
 
-type onDetachedDataChannelFunc func(detached datachannel.ReadWriteCloser, ctx context.Context, span trace.Span)
+type onDetachedDataChannelFunc func(detached datachannel.ReadWriteCloser, ctx context.Context)
 
 func (tc *TrackerClient) initAnsweringPeerConnection(
 	peerConn *wrappedPeerConnection,
 	offerContext offerContext,
 ) (answer webrtc.SessionDescription, err error) {
-	peerConn.span.SetAttributes(attribute.String(webrtcConnTypeKey, "answer"))
-
 	timer := time.AfterFunc(30*time.Second, func() {
-		peerConn.span.SetStatus(codes.Error, "answer timeout")
 		metrics.Add("answering peer connections timed out", 1)
 		peerConn.Close()
 	})
 	peerConn.OnDataChannel(func(d *webrtc.DataChannel) {
-		initDataChannel(d, peerConn, func(detached datachannel.ReadWriteCloser, ctx context.Context, span trace.Span) {
+		initDataChannel(d, peerConn, func(detached datachannel.ReadWriteCloser, ctx context.Context) {
 			timer.Stop()
 			metrics.Add("answering peer connection conversions", 1)
 			tc.mu.Lock()
@@ -188,7 +167,6 @@ func (tc *TrackerClient) initAnsweringPeerConnection(
 				InfoHash:       offerContext.InfoHash,
 				peerConnection: peerConn,
 				Context:        ctx,
-				Span:           span,
 			})
 		})
 	})
@@ -219,7 +197,6 @@ func (tc *TrackerClient) newAnsweringPeerConnection(
 	}
 	answer, err = tc.initAnsweringPeerConnection(peerConn, offerContext)
 	if err != nil {
-		peerConn.span.RecordError(err)
 		peerConn.Close()
 	}
 	return
@@ -243,20 +220,16 @@ func initDataChannel(
 	pc *wrappedPeerConnection,
 	onOpen onDetachedDataChannelFunc,
 ) {
-	var span trace.Span
 	dc.OnClose(func() {
-		span.End()
 	})
 	dc.OnOpen(func() {
-		pc.span.AddEvent("data channel opened")
 		var ctx context.Context
-		ctx, span = otel.Tracer(tracerName).Start(pc.ctx, "DataChannel")
 		raw, err := dc.Detach()
 		if err != nil {
 			// This shouldn't happen if the API is configured correctly, and we call from OnOpen.
 			panic(err)
 		}
-		onOpen(hookDataChannelCloser(raw, pc, span, dc), ctx, span)
+		onOpen(hookDataChannelCloser(raw, pc, dc), ctx)
 	})
 }
 
@@ -265,7 +238,6 @@ func initDataChannel(
 func hookDataChannelCloser(
 	dcrwc datachannel.ReadWriteCloser,
 	pc *wrappedPeerConnection,
-	dataChannelSpan trace.Span,
 	originalDataChannel *webrtc.DataChannel,
 ) datachannel.ReadWriteCloser {
 	return struct {
@@ -277,7 +249,6 @@ func hookDataChannelCloser(
 			dcrwc.Close()
 			pc.Close()
 			originalDataChannel.Close()
-			dataChannelSpan.End()
 			return nil
 		}),
 	}

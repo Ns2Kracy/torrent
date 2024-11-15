@@ -14,7 +14,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/datachannel"
 	"github.com/pion/webrtc/v3"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/anacrolix/torrent/tracker"
 )
@@ -77,7 +76,6 @@ type DataChannelContext struct {
 	InfoHash     [20]byte
 	// This is private as some methods might not be appropriate with data channel context.
 	peerConnection *wrappedPeerConnection
-	Span           trace.Span
 	Context        context.Context
 }
 
@@ -244,14 +242,16 @@ func (tc *TrackerClient) Announce(event tracker.AnnounceEvent, infoHash [20]byte
 	})
 
 	tc.Logger.Levelf(log.Debug, "announcing offer")
-	err = tc.announce(event, infoHash, []outboundOffer{{
-		offerId: offerIDBinary,
-		outboundOfferValue: outboundOfferValue{
-			originalOffer:  offer,
-			peerConnection: pc,
-			infoHash:       infoHash,
-			dataChannel:    dc,
-		}},
+	err = tc.announce(event, infoHash, []outboundOffer{
+		{
+			offerId: offerIDBinary,
+			outboundOfferValue: outboundOfferValue{
+				originalOffer:  offer,
+				peerConnection: pc,
+				infoHash:       infoHash,
+				dataChannel:    dc,
+			},
+		},
 	})
 	if err != nil {
 		dc.Close()
@@ -418,7 +418,6 @@ func (tc *TrackerClient) handleAnswer(offerId string, answer webrtc.SessionDescr
 	err := offer.peerConnection.SetRemoteDescription(answer)
 	if err != nil {
 		err = fmt.Errorf("using outbound offer answer: %w", err)
-		offer.peerConnection.span.RecordError(err)
 		tc.Logger.LevelPrint(log.Error, err)
 		return
 	}

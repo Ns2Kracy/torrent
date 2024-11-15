@@ -13,10 +13,6 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/generics"
 	"github.com/anacrolix/log"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 
 	trackerServer "github.com/anacrolix/torrent/tracker/server"
 	"github.com/anacrolix/torrent/tracker/udp"
@@ -41,7 +37,6 @@ type Server struct {
 
 type RequestSourceAddr = net.Addr
 
-var tracer = otel.Tracer("torrent.tracker.udp")
 
 func (me *Server) HandleRequest(
 	ctx context.Context,
@@ -49,14 +44,6 @@ func (me *Server) HandleRequest(
 	source RequestSourceAddr,
 	body []byte,
 ) (err error) {
-	ctx, span := tracer.Start(ctx, "Server.HandleRequest",
-		trace.WithAttributes(attribute.Int("payload.len", len(body))))
-	defer span.End()
-	defer func() {
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-		}
-	}()
 	var h udp.RequestHeader
 	var r bytes.Reader
 	r.Reset(body)
@@ -210,27 +197,19 @@ func RunSimple(ctx context.Context, s *Server, pc net.PacketConn, family udp.Add
 	sem := make(chan struct{}, 1000)
 	for {
 		n, addr, err := pc.ReadFrom(b[:])
-		ctx, span := tracer.Start(ctx, "handle udp packet")
 		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			span.End()
 			return err
 		}
 		select {
 		case <-ctx.Done():
-			span.SetStatus(codes.Error, err.Error())
-			span.End()
 			return ctx.Err()
 		default:
-			span.SetStatus(codes.Error, "concurrency limit reached")
-			span.End()
 			log.Levelf(log.Debug, "dropping request from %v: concurrency limit reached", addr)
 			continue
 		case sem <- struct{}{}:
 		}
 		b := append([]byte(nil), b[:n]...)
 		go func() {
-			defer span.End()
 			defer func() { <-sem }()
 			err := s.HandleRequest(ctx, family, addr, b)
 			if err != nil {

@@ -2,7 +2,6 @@ package trackerServer
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"net/netip"
 	"sync"
@@ -10,10 +9,6 @@ import (
 
 	"github.com/anacrolix/generics"
 	"github.com/anacrolix/log"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/anacrolix/torrent/tracker"
 	"github.com/anacrolix/torrent/tracker/udp"
@@ -103,33 +98,9 @@ func addMissing(orig []PeerInfo, new peerSet) {
 	}
 }
 
-var tracer = otel.Tracer("torrent.tracker.udp")
-
 func (me *AnnounceHandler) Serve(
 	ctx context.Context, req AnnounceRequest, addr AnnounceAddr, opts GetPeersOpts,
 ) (ret ServerAnnounceResult) {
-	ctx, span := tracer.Start(
-		ctx,
-		"AnnounceHandler.Serve",
-		trace.WithAttributes(
-			attribute.Int64("announce.request.num_want", int64(req.NumWant)),
-			attribute.Int("announce.request.port", int(req.Port)),
-			attribute.String("announce.request.info_hash", hex.EncodeToString(req.InfoHash[:])),
-			attribute.String("announce.request.event", req.Event.String()),
-			attribute.Int64("announce.get_peers.opts.max_count_value", int64(opts.MaxCount.Value)),
-			attribute.Bool("announce.get_peers.opts.max_count_ok", opts.MaxCount.Ok),
-			attribute.String("announce.source.addr.ip", addr.Addr().String()),
-			attribute.Int("announce.source.addr.port", int(addr.Port())),
-		),
-	)
-	defer span.End()
-	defer func() {
-		span.SetAttributes(attribute.Int("announce.get_peers.len", len(ret.Peers)))
-		if ret.Err != nil {
-			span.SetStatus(codes.Error, ret.Err.Error())
-		}
-	}()
-
 	if req.Port != 0 {
 		addr = netip.AddrPortFrom(addr.Addr(), req.Port)
 	}
