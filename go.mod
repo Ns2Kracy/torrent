@@ -7,18 +7,18 @@ require (
 	github.com/ajwerner/btree v0.0.0-20211221152037-f427b3e689c0
 	github.com/alexflint/go-arg v1.4.3
 	github.com/anacrolix/bargle v0.0.0-20221014000746-4f2739072e9d
-	github.com/anacrolix/chansync v0.4.1-0.20240627045151-1aa1ac392fe8
+	github.com/anacrolix/chansync v0.6.0
 	github.com/anacrolix/dht/v2 v2.19.2-0.20221121215055-066ad8494444
 	github.com/anacrolix/envpprof v1.3.0
-	github.com/anacrolix/fuse v0.2.0
+	github.com/anacrolix/fuse v0.4.0
 	github.com/anacrolix/generics v0.0.3-0.20240902042256-7fb2702ef0ca
-	github.com/anacrolix/go-libutp v1.3.1
+	github.com/anacrolix/go-libutp v1.3.2
 	github.com/anacrolix/gostdapp v0.1.0
 	github.com/anacrolix/log v0.15.3-0.20240627045001-cd912c641d83
 	github.com/anacrolix/missinggo v1.3.0
 	github.com/anacrolix/missinggo/v2 v2.7.4
 	github.com/anacrolix/multiless v0.4.0
-	github.com/anacrolix/possum/go v0.1.1-0.20240321122240-a01f3a22f2d1
+	github.com/anacrolix/possum/go v0.3.2
 	github.com/anacrolix/squirrel v0.6.4
 	github.com/anacrolix/sync v0.5.1
 	github.com/anacrolix/tagflag v1.3.0
@@ -63,7 +63,7 @@ require (
 	github.com/alexflint/go-scalar v1.1.0 // indirect
 	github.com/anacrolix/backtrace v0.0.0-20221205112523-22a61db8f82e // indirect
 	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
-	github.com/anacrolix/mmsg v1.0.0 // indirect
+	github.com/anacrolix/mmsg v1.0.1 // indirect
 	github.com/anacrolix/stm v0.4.0 // indirect
 	github.com/benbjohnson/immutable v0.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

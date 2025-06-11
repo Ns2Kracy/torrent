@@ -32,6 +32,12 @@ import (
 	utHolepunch "github.com/anacrolix/torrent/peer_protocol/ut-holepunch"
 )
 
+type PeerStatus struct {
+	Id  PeerID
+	Ok  bool
+	Err string // see https://github.com/golang/go/issues/5161
+}
+
 // Maintains the state of a BitTorrent-protocol based connection with a peer.
 type PeerConn struct {
 	Peer
@@ -90,6 +96,12 @@ type PeerConn struct {
 	// we can verify all the pieces for a file when they're all arrived before submitting them to
 	// the torrent.
 	receivedHashPieces map[[32]byte][][32]byte
+}
+
+func (cn *PeerConn) lastWriteUploadRate() float64 {
+	cn.messageWriter.mu.Lock()
+	defer cn.messageWriter.mu.Unlock()
+	return cn.messageWriter.dataUploadRate
 }
 
 func (cn *PeerConn) pexStatus() string {
@@ -661,9 +673,11 @@ func (c *PeerConn) peerRequestDataReader(r Request, prs *peerRequestState) {
 func (c *PeerConn) peerRequestDataReadFailed(err error, r Request) {
 	torrent.Add("peer request data read failures", 1)
 	logLevel := log.Warning
-	if c.t.hasStorageCap() {
+	if c.t.hasStorageCap() || c.t.closed.IsSet() {
 		// It's expected that pieces might drop. See
-		// https://github.com/anacrolix/torrent/issues/702#issuecomment-1000953313.
+		// https://github.com/anacrolix/torrent/issues/702#issuecomment-1000953313. Also the torrent
+		// may have been Dropped, and the user expects to own the files, see
+		// https://github.com/anacrolix/torrent/issues/980.
 		logLevel = log.Debug
 	}
 	c.logger.Levelf(logLevel, "error reading chunk for peer Request %v: %v", r, err)

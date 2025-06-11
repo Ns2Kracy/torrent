@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/anacrolix/log"
+	"github.com/stretchr/testify/require"
 
 	pp "github.com/anacrolix/torrent/peer_protocol"
 )
@@ -34,4 +35,14 @@ func TestingConfig(t testing.TB) *ClientConfig {
 	//	return t
 	//})
 	return cfg
+}
+
+func readChannelTimeout[T any](t *testing.T, channel chan T, duration time.Duration) interface{} {
+	select {
+	case s := <-channel:
+		return s
+	case <-time.After(duration):
+		require.Fail(t, "Timeout reading observer channel.")
+	}
+	return nil
 }

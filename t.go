@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -11,7 +12,9 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
-// The Torrent's infohash. This is fixed and cannot change. It uniquely identifies a torrent.
+// The Torrent's infohash. This is fixed and cannot change. It uniquely
+// identifies a torrent. TODO: If this doesn't change, should we stick to
+// referring to a Torrent by the original infohash given to us?
 func (t *Torrent) InfoHash() metainfo.Hash {
 	return *t.canonicalShortInfohash()
 }
@@ -41,6 +44,7 @@ func (t *Torrent) newReader(offset, length int64) Reader {
 		t:      t,
 		offset: offset,
 		length: length,
+		ctx:    context.Background(),
 	}
 	r.readaheadFunc = defaultReadaheadFunc
 	t.addReader(&r)
